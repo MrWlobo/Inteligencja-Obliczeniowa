@@ -13,7 +13,7 @@ class Hexapawn(TwoPlayerGame):
     http://fr.wikipedia.org/wiki/Hexapawn
     """
 
-    def __init__(self, players, size=(4, 4)):
+    def __init__(self, players, starting_player, size=(4, 4)):
         self.size = M, N = size
         p = [[(i, j) for j in range(N)] for i in [0, M - 1]]
 
@@ -23,8 +23,7 @@ class Hexapawn(TwoPlayerGame):
             players[i].pawns = pawns
 
         self.players = players
-        self.current_player = 1
-        self.removed_pawns =  []
+        self.current_player = starting_player
 
     def possible_moves(self):
         moves = []
@@ -94,6 +93,32 @@ if __name__ == "__main__":
 
     scoring = lambda game: -100 if game.lose() else 0
     ai = Negamax(10, scoring)
-    game = Hexapawn([AI_Player(ai), AI_Player(ai)])
-    game.play()
-    print("player %d wins after %d turns " % (game.opponent_index, game.nmove))
+
+    player1 = AI_Player(ai)
+    player2 = AI_Player(ai)
+
+    games_count = 20
+    player1_wins = 0
+    player2_wins = 0
+
+    starting_player = 1
+
+    for _ in range(games_count):
+        game = Hexapawn([player1, player2], starting_player)
+        game.play()
+        print("player %d wins after %d turns " % (game.opponent_index, game.nmove))
+
+        if game.opponent_index == 1:
+            player1_wins += 1
+        else:
+            player2_wins += 1
+
+        if starting_player == 1:
+            starting_player = 2
+        else:
+            starting_player = 1
+
+    print(f"Player 1 Wins: {player1_wins}")
+    print(f"Player 2 Wins: {player2_wins}")
+    print(f"Draws: {games_count - player1_wins - player2_wins}")
+
