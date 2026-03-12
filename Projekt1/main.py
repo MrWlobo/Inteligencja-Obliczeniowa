@@ -1,5 +1,6 @@
 from easyAI import TwoPlayerGame
 import random
+import copy
 
 # Convert D7 to (3,6) and back...
 to_string = lambda move: " ".join(
@@ -7,6 +8,52 @@ to_string = lambda move: " ".join(
 )
 to_tuple = lambda s: ("ABCDEFGHIJ".index(s[0]), int(s[1:]) - 1)
 
+class Expectiminimax:
+    def __init__(self, depth, scoring):
+        self.depth = depth
+        self.scoring = scoring
+
+    def __call__(self, game):
+        """Metoda wywoływana przez AI_Player, aby znaleźć najlepszy ruch."""
+        best_move = None
+        max_val = -float('inf')
+        alpha = -float('inf')
+        beta = float('inf')
+
+        for move in game.possible_moves():
+            game_copy = copy.deepcopy(game)
+            game_copy.make_move(move)
+            val = self._expecti(game_copy, self.depth - 1, alpha, beta, False)
+            if val > max_val:
+                max_val = val
+                best_move = move
+            alpha = max(alpha, val)
+        return best_move
+
+    def _expecti(self, game, depth, alpha, beta, maximizing):
+        if depth == 0 or game.is_over():
+            return self.scoring(game)
+
+        if maximizing:
+            v = -float('inf')
+            for move in game.possible_moves():
+                game_copy = copy.deepcopy(game)
+                game_copy.make_move(move)
+                v = max(v, self._expecti(game_copy, depth - 1, alpha, beta, False))
+                alpha = max(alpha, v)
+                if beta <= alpha: break
+            return v
+        else:
+            v = float('inf')
+            for move in game.possible_moves():
+                game_copy = copy.deepcopy(game)
+                game_copy.make_move(move)
+                res = self._expecti(game_copy, depth - 1, alpha, beta, True)
+                v = min(v, res)
+                beta = min(beta, v)
+                if beta <= alpha: break
+            return v
+        
 class Hexapawn(TwoPlayerGame):
     """
     A nice game whose rules are explained here:
@@ -19,7 +66,7 @@ class Hexapawn(TwoPlayerGame):
         for i, d, goal, pawns in [(0, 1, M - 1, p[0]), (1, -1, 0, p[1])]:
             players[i].direction = d
             players[i].goal_line = goal
-            players[i].pawns = pawns
+            players[i].pawns = list(pawns)
 
         self.players = players
         self.current_player = starting_player
@@ -44,16 +91,13 @@ class Hexapawn(TwoPlayerGame):
         self.player.pawns[ind] = move[1]
 
         if move[1] in self.opponent.pawns:
-            # owner is the index (0 or 1) of the player who owned the captured pawn
             owner = 0 if self.opponent is self.players[0] else 1
-            # store (owner, column) so resurrected pawn has the same column as original
             self.removed_pawns.append((owner, move[1][1]))
             self.opponent.pawns.remove(move[1])
         
         if self.removed_pawns and random.random() < 0.3:
             idx = random.randint(0, len(self.removed_pawns) - 1)
             owner, col = self.removed_pawns.pop(idx)
-            # compute owner's home row (player 0 starts at row 0, player 1 at M-1)
             home_row = 0 if self.players[owner].direction == 1 else (self.size[0] - 1)
             start_pos = (home_row, col)
             all_occupied = self.players[0].pawns + self.players[1].pawns
@@ -89,7 +133,12 @@ if __name__ == "__main__":
     from easyAI import AI_Player, Human_Player, Negamax
 
     scoring = lambda game: -100 if game.lose() else 0
-    ai = Negamax(10, scoring)
+    USE_EXPECTI = True 
+    
+    if USE_EXPECTI:
+        ai = Expectiminimax(5, scoring)
+    else:
+        ai = Negamax(10, scoring)
 
     player1 = AI_Player(ai)
     player2 = AI_Player(ai)
