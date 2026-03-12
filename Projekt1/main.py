@@ -12,7 +12,6 @@ class Hexapawn(TwoPlayerGame):
     A nice game whose rules are explained here:
     http://fr.wikipedia.org/wiki/Hexapawn
     """
-
     def __init__(self, players, starting_player, size=(4, 4)):
         self.size = M, N = size
         p = [[(i, j) for j in range(N)] for i in [0, M - 1]]
@@ -24,7 +23,7 @@ class Hexapawn(TwoPlayerGame):
 
         self.players = players
         self.current_player = starting_player
-
+        self.removed_pawns = []
     def possible_moves(self):
         moves = []
         opponent_pawns = self.opponent.pawns
@@ -52,16 +51,14 @@ class Hexapawn(TwoPlayerGame):
             self.opponent.pawns.remove(move[1])
         
         if self.removed_pawns and random.random() < 0.3:
-            owner, col = random.choice(self.removed_pawns)
+            idx = random.randint(0, len(self.removed_pawns) - 1)
+            owner, col = self.removed_pawns.pop(idx)
             # compute owner's home row (player 0 starts at row 0, player 1 at M-1)
             home_row = 0 if self.players[owner].direction == 1 else (self.size[0] - 1)
             start_pos = (home_row, col)
-            # per your rule, don't check occupancy here (you said it cannot happen)
-            self.players[owner].pawns.append(start_pos)
-            try:
-                self.removed_pawns.remove((owner, col))
-            except ValueError:
-                pass
+            all_occupied = self.players[0].pawns + self.players[1].pawns
+            if start_pos not in all_occupied:
+                self.players[owner].pawns.append(start_pos)
 
 
     def lose(self):
@@ -97,7 +94,7 @@ if __name__ == "__main__":
     player1 = AI_Player(ai)
     player2 = AI_Player(ai)
 
-    games_count = 20
+    games_count = 2
     player1_wins = 0
     player2_wins = 0
 
