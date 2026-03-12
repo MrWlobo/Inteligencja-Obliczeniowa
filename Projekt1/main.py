@@ -22,7 +22,7 @@ class Expectiminimax:
 
         for move in game.possible_moves():
             game_copy = copy.deepcopy(game)
-            game_copy.make_move(move)
+            game_copy.play_move(move)
             val = self._expecti(game_copy, self.depth - 1, alpha, beta, False)
             if val > max_val:
                 max_val = val
@@ -32,13 +32,14 @@ class Expectiminimax:
 
     def _expecti(self, game, depth, alpha, beta, maximizing):
         if depth == 0 or game.is_over():
-            return self.scoring(game)
+            score = self.scoring(game)
+            return score if maximizing else -score
 
         if maximizing:
             v = -float('inf')
             for move in game.possible_moves():
                 game_copy = copy.deepcopy(game)
-                game_copy.make_move(move)
+                game_copy.play_move(move)
                 v = max(v, self._expecti(game_copy, depth - 1, alpha, beta, False))
                 alpha = max(alpha, v)
                 if beta <= alpha: break
@@ -47,7 +48,7 @@ class Expectiminimax:
             v = float('inf')
             for move in game.possible_moves():
                 game_copy = copy.deepcopy(game)
-                game_copy.make_move(move)
+                game_copy.play_move(move)
                 res = self._expecti(game_copy, depth - 1, alpha, beta, True)
                 v = min(v, res)
                 beta = min(beta, v)
@@ -76,7 +77,7 @@ class Hexapawn(TwoPlayerGame):
         opponent_pawns = self.opponent.pawns
         d = self.player.direction
         for i, j in self.player.pawns:
-            if (i + d, j) not in opponent_pawns:
+            if (i + d, j) not in opponent_pawns and (i + d, j) not in self.player.pawns:
                 moves.append(((i, j), (i + d, j)))
             if (i + d, j + 1) in opponent_pawns:
                 moves.append(((i, j), (i + d, j + 1)))
