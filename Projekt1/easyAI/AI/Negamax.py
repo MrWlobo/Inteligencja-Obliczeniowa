@@ -4,6 +4,7 @@ and (optionnally), transposition tables.
 """
 
 import pickle
+import time
 
 LOWERBOUND, EXACT, UPPERBOUND = -1, 0, 1
 inf = float("infinity")
@@ -167,6 +168,7 @@ class Negamax:
         self.tt = tt
         self.win_score = win_score
         self.use_alpha_beta_pruning = use_alpha_beta_pruning
+        self.decision_time_list = []
 
     def __call__(self, game):
         """
@@ -177,6 +179,7 @@ class Negamax:
             self.scoring if self.scoring else (lambda g: g.scoring())
         )  # horrible hack
 
+        start = time.time()
         self.alpha = negamax(
             game,
             self.depth,
@@ -187,4 +190,7 @@ class Negamax:
             self.tt,
             self.use_alpha_beta_pruning
         )
+        end = time.time()
+        self.decision_time_list.append(end - start)
+
         return game.ai_move

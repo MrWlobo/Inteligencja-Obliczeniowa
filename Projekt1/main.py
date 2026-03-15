@@ -13,6 +13,7 @@ class Expectiminimax:
     def __init__(self, depth, scoring):
         self.depth = depth
         self.scoring = scoring
+        self.decision_time_list = []
 
     def __call__(self, game):
         """Metoda wywoływana przez AI_Player, aby znaleźć najlepszy ruch."""
@@ -21,6 +22,7 @@ class Expectiminimax:
         alpha = -float('inf')
         beta = float('inf')
 
+        start = time.time()
         for move in game.possible_moves():
             game_copy = copy.deepcopy(game)
             game_copy.play_move(move)
@@ -29,6 +31,9 @@ class Expectiminimax:
                 max_val = val
                 best_move = move
             alpha = max(alpha, val)
+        end = time.time()
+        self.decision_time_list.append(end - start)
+
         return best_move
 
     def _expecti(self, game, depth, alpha, beta, maximizing):
@@ -134,37 +139,41 @@ class Hexapawn(TwoPlayerGame):
 
 
 if __name__ == "__main__":
-    games_count = 1000
-    depth = 2
-    use_alpha_beta_pruning = True
-    use_stochastic = False
-    use_expecti = False
+    games_count = 100
+
+    depth_player_1 = 8
+    depth_player_2 = 8
+    use_alpha_beta_pruning_player_1 = True
+    use_alpha_beta_pruning_player_2 = True
+    use_expecti_player_1 = False
+    use_expecti_player_2 = False
+
+    use_stochastic = True
 
     from easyAI import AI_Player, Human_Player, Negamax
 
     scoring = lambda game: -100 if game.lose() else 0
 
-    if use_expecti:
-        ai = Expectiminimax(depth, scoring)
+    if use_expecti_player_1:
+        ai_player_1 = Expectiminimax(depth_player_1, scoring)
     else:
-        ai = Negamax(depth, scoring, use_alpha_beta_pruning=use_alpha_beta_pruning)
+        ai_player_1 = Negamax(depth_player_1, scoring, use_alpha_beta_pruning=use_alpha_beta_pruning_player_1)
 
-    player1 = AI_Player(ai)
-    player2 = AI_Player(ai)
+    if use_expecti_player_2:
+        ai_player_2 = Expectiminimax(depth_player_2, scoring)
+    else:
+        ai_player_2 = Negamax(depth_player_2, scoring, use_alpha_beta_pruning=use_alpha_beta_pruning_player_2)
+
+    player1 = AI_Player(ai_player_1)
+    player2 = AI_Player(ai_player_2)
 
     player1_wins = 0
     player2_wins = 0
     starting_player = 1
 
-    average_decision_times = []
     for _ in range(games_count):
         game = Hexapawn([player1, player2], starting_player, use_stochastic=use_stochastic)
-        start = time.time()
         game.play()
-        end = time.time()
-        print("player %d wins after %d turns " % (game.opponent_index, game.nmove))
-        print(f"Average move time: {(end - start) / game.nmove}")
-        average_decision_times.append((end - start) / game.nmove)
 
         if game.opponent_index == 1:
             player1_wins += 1
@@ -177,10 +186,20 @@ if __name__ == "__main__":
     print("------------------------------")
     print(f"Player 1 Wins: {player1_wins}")
     print(f"Player 2 Wins: {player2_wins}")
-    print(f"Average decision time over all games: {sum(average_decision_times) / len(average_decision_times)}")
-    print(f"Depth: {depth}")
-    if use_expecti:
-        print("Used Excepti")
+    print(f"Draws: {games_count - player1_wins - player2_wins}")
+    print(f"Player 1 average decision time over all games: {sum(ai_player_1.decision_time_list) / len(ai_player_1.decision_time_list)}")
+    print(f"Player 2 average decision time over all games: {sum(ai_player_2.decision_time_list) / len(ai_player_2.decision_time_list)}")
+    print(f"Depth of Player 1: {depth_player_1}")
+    print(f"Depth of Player 2: {depth_player_2}")
+
+    if use_expecti_player_1:
+        print("Player 1 used Excepti")
     else:
-        print(f"Stochastic: {use_stochastic}")
-        print(f"Alpha-Beta pruning used: {use_alpha_beta_pruning}")
+        print(f"Player 1 used Alpha-Beta pruning: {use_alpha_beta_pruning_player_1}")
+
+    if use_expecti_player_2:
+        print("Player 2 used Excepti")
+    else:
+        print(f"Player 2 used Alpha-Beta pruning: {use_alpha_beta_pruning_player_2}")
+
+    print(f"Stochastic: {use_stochastic}")
