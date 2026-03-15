@@ -61,7 +61,7 @@ class Hexapawn(TwoPlayerGame):
     A nice game whose rules are explained here:
     http://fr.wikipedia.org/wiki/Hexapawn
     """
-    def __init__(self, players, starting_player, size=(4, 4)):
+    def __init__(self, players, starting_player, size=(4, 4), use_stochastic=True):
         self.size = M, N = size
         p = [[(i, j) for j in range(N)] for i in [0, M - 1]]
 
@@ -73,6 +73,8 @@ class Hexapawn(TwoPlayerGame):
         self.players = players
         self.current_player = starting_player
         self.removed_pawns = []
+        self.use_stochastic = use_stochastic
+
     def possible_moves(self):
         moves = []
         opponent_pawns = self.opponent.pawns
@@ -97,7 +99,7 @@ class Hexapawn(TwoPlayerGame):
             self.removed_pawns.append((owner, move[1][1]))
             self.opponent.pawns.remove(move[1])
         
-        if self.removed_pawns and random.random() < 0.1:
+        if self.use_stochastic and self.removed_pawns and random.random() < 0.1:
             idx = random.randint(0, len(self.removed_pawns) - 1)
             owner, col = self.removed_pawns.pop(idx)
             home_row = 0 if self.players[owner].direction == 1 else (self.size[0] - 1)
@@ -132,10 +134,11 @@ class Hexapawn(TwoPlayerGame):
 
 
 if __name__ == "__main__":
-    games_count = 100
-    depth = 3
-    use_alpha_beta_pruning = False
-    use_expecti = True
+    games_count = 1000
+    depth = 2
+    use_alpha_beta_pruning = True
+    use_stochastic = False
+    use_expecti = False
 
     from easyAI import AI_Player, Human_Player, Negamax
 
@@ -155,7 +158,7 @@ if __name__ == "__main__":
 
     average_decision_times = []
     for _ in range(games_count):
-        game = Hexapawn([player1, player2], starting_player)
+        game = Hexapawn([player1, player2], starting_player, use_stochastic=use_stochastic)
         start = time.time()
         game.play()
         end = time.time()
@@ -176,4 +179,8 @@ if __name__ == "__main__":
     print(f"Player 2 Wins: {player2_wins}")
     print(f"Average decision time over all games: {sum(average_decision_times) / len(average_decision_times)}")
     print(f"Depth: {depth}")
-    print(f"Alpha-Beta pruning used: {use_alpha_beta_pruning}")
+    if use_expecti:
+        print("Used Excepti")
+    else:
+        print(f"Stochastic: {use_stochastic}")
+        print(f"Alpha-Beta pruning used: {use_alpha_beta_pruning}")
