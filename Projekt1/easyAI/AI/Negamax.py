@@ -9,7 +9,7 @@ LOWERBOUND, EXACT, UPPERBOUND = -1, 0, 1
 inf = float("infinity")
 
 
-def negamax(game, depth, origDepth, scoring, alpha=+inf, beta=-inf, tt=None):
+def negamax(game, depth, origDepth, scoring, alpha=+inf, beta=-inf, tt=None, use_alpha_beta_pruning=True):
     """
     This implements Negamax with transposition tables.
     This method is not meant to be used directly. See ``easyAI.Negamax``
@@ -32,15 +32,16 @@ def negamax(game, depth, origDepth, scoring, alpha=+inf, beta=-inf, tt=None):
                 if depth == origDepth:
                     game.ai_move = lookup["move"]
                 return value
-            elif flag == LOWERBOUND:
-                alpha = max(alpha, value)
-            elif flag == UPPERBOUND:
-                beta = min(beta, value)
+            if use_alpha_beta_pruning:
+                if flag == LOWERBOUND:
+                    alpha = max(alpha, value)
+                elif flag == UPPERBOUND:
+                    beta = min(beta, value)
 
-            if alpha >= beta:
-                if depth == origDepth:
-                    game.ai_move = lookup["move"]
-                return value
+                if alpha >= beta:
+                    if depth == origDepth:
+                        game.ai_move = lookup["move"]
+                    return value
 
     if (depth == 0) or game.is_over():
         # NOTE: the "depth" variable represents the depth left to recurse into,
@@ -76,7 +77,7 @@ def negamax(game, depth, origDepth, scoring, alpha=+inf, beta=-inf, tt=None):
         game.make_move(move)
         game.switch_player()
 
-        move_alpha = -negamax(game, depth - 1, origDepth, scoring, -beta, -alpha, tt)
+        move_alpha = -negamax(game, depth - 1, origDepth, scoring, -beta, -alpha, tt, use_alpha_beta_pruning)
 
         if unmake_move:
             game.switch_player()
@@ -92,7 +93,7 @@ def negamax(game, depth, origDepth, scoring, alpha=+inf, beta=-inf, tt=None):
             # best_move = move
             if depth == origDepth:
                 state.ai_move = move
-            if alpha >= beta:
+            if alpha >= beta and use_alpha_beta_pruning:
                 break
 
     if tt is not None:
@@ -160,11 +161,12 @@ class Negamax:
 
     """
 
-    def __init__(self, depth, scoring=None, win_score=+inf, tt=None):
+    def __init__(self, depth, scoring=None, win_score=+inf, tt=None, use_alpha_beta_pruning=True):
         self.scoring = scoring
         self.depth = depth
         self.tt = tt
         self.win_score = win_score
+        self.use_alpha_beta_pruning = use_alpha_beta_pruning
 
     def __call__(self, game):
         """
@@ -183,5 +185,6 @@ class Negamax:
             -self.win_score,
             +self.win_score,
             self.tt,
+            self.use_alpha_beta_pruning
         )
         return game.ai_move

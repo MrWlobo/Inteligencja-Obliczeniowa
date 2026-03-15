@@ -1,5 +1,6 @@
 from easyAI import TwoPlayerGame
 import random
+import time
 
 # Convert D7 to (3,6) and back...
 to_string = lambda move: " ".join(
@@ -50,7 +51,7 @@ class Hexapawn(TwoPlayerGame):
             self.removed_pawns.append((owner, move[1][1]))
             self.opponent.pawns.remove(move[1])
         
-        if self.removed_pawns and random.random() < 0.3:
+        if self.removed_pawns and random.random() < 0.1:
             idx = random.randint(0, len(self.removed_pawns) - 1)
             owner, col = self.removed_pawns.pop(idx)
             # compute owner's home row (player 0 starts at row 0, player 1 at M-1)
@@ -86,36 +87,44 @@ class Hexapawn(TwoPlayerGame):
 
 
 if __name__ == "__main__":
+    games_count = 100
+    depth = 3
+    use_alpha_beta_pruning = False
+
     from easyAI import AI_Player, Human_Player, Negamax
 
     scoring = lambda game: -100 if game.lose() else 0
-    ai = Negamax(10, scoring)
+    ai = Negamax(depth, scoring, use_alpha_beta_pruning=use_alpha_beta_pruning)
 
     player1 = AI_Player(ai)
     player2 = AI_Player(ai)
 
-    games_count = 2
     player1_wins = 0
     player2_wins = 0
 
     starting_player = 1
 
+    average_decision_times = []
     for _ in range(games_count):
         game = Hexapawn([player1, player2], starting_player)
+        start = time.time()
         game.play()
+        end = time.time()
         print("player %d wins after %d turns " % (game.opponent_index, game.nmove))
+        print(f"Average move time: {(end - start) / game.nmove}")
+        average_decision_times.append((end - start) / game.nmove)
 
         if game.opponent_index == 1:
             player1_wins += 1
         else:
             player2_wins += 1
 
-        if starting_player == 1:
-            starting_player = 2
-        else:
-            starting_player = 1
+        starting_player = 1 if starting_player == 2 else 2
 
+
+    print("------------------------------")
     print(f"Player 1 Wins: {player1_wins}")
     print(f"Player 2 Wins: {player2_wins}")
-    print(f"Draws: {games_count - player1_wins - player2_wins}")
-
+    print(f"Average decision time over all games: {sum(average_decision_times) / len(average_decision_times)}")
+    print(f"Depth: {depth}")
+    print(f"Alpha-Beta pruning used: {use_alpha_beta_pruning}")
