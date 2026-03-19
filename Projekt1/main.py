@@ -22,6 +22,8 @@ class Expectiminimax:
         alpha = -float('inf')
         beta = float('inf')
 
+        print("Expecti move")
+
         start = time.time()
         for move in game.possible_moves():
             game_copy = copy.deepcopy(game)
@@ -141,11 +143,11 @@ class Hexapawn(TwoPlayerGame):
 if __name__ == "__main__":
     games_count = 100
 
-    depth_player_1 = 8
-    depth_player_2 = 8
+    depth_player_1 = 3
+    depth_player_2 = 7
     use_alpha_beta_pruning_player_1 = True
     use_alpha_beta_pruning_player_2 = True
-    use_expecti_player_1 = False
+    use_expecti_player_1 = True
     use_expecti_player_2 = False
 
     use_stochastic = True
