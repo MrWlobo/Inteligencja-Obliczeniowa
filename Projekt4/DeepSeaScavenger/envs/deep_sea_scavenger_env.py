@@ -110,7 +110,7 @@ class DeepSeaScavenger(gym.Env):
 
             treasure_x = self.np_random.integers(50, self.window_size - 50)
             treasure_y = self.floor_heights[int(treasure_x)]
-            self.treasure_pos = np.array([float(treasure_x), float(treasure_y - 10)], dtype=np.float32)
+            self.treasure_pos = np.array([float(treasure_x), float(treasure_y - 20)], dtype=np.float32)
 
             observation = self._get_obs()
             info = self._get_info()
