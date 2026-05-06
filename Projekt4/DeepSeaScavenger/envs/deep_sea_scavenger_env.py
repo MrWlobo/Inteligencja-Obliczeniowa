@@ -97,22 +97,43 @@ class DeepSeaScavenger(gym.Env):
             return observation, info
 
     def step(self, action):
-        # Map the action (element of {0,1,2,3}) to the direction we walk in
-        direction = self._action_to_direction[action]
-        # We use `np.clip` to make sure we don't leave the grid
-        self._agent_location = np.clip(
-            self._agent_location + direction, 0, self.size - 1
-        )
-        # An episode is done iff the agent has reached the target
-        terminated = np.array_equal(self._agent_location, self._target_location)
-        reward = 1 if terminated else 0  # Binary sparse rewards
-        observation = self._get_obs()
-        info = self._get_info()
+            # Reading action
+            engine = action[0]
+            torque = action[1]
+            sonar_req = action[2]
 
-        if self.render_mode == "human":
-            self._render_frame()
+            # Physics
+            self.angle += torque * 0.1
+            self.speed += engine * 0.05
+            self.speed = np.clip(self.speed, -0.5, 1.0)
+            
+            # Updating the position of the submarine
+            self.x += np.cos(self.angle) * self.speed
+            self.y += np.sin(self.angle) * self.speed
 
-        return observation, reward, terminated, False, info
+            # sonar and oxygen
+            self.is_sonar_active = 1.0 if sonar_req > 0.5 else 0.0
+            self.oxygen -= 0.001
+            if self.is_sonar_active:
+                self.oxygen -= 0.005
+                self.sonar_readings = self._cast_rays() # TBI
+
+            # Check for termination condition (hit the bottom or ran out of oxygen)
+            terminated = self.oxygen <= 0 or self._check_collision()
+            
+            # Reward
+            dist = np.linalg.norm(np.array([self.x, self.y]) - self.treasure_pos)
+            reward = -0.01
+            if dist < 20.0: reward = 10.0
+
+            # 6. Preparing info
+            observation = self._get_obs()
+            info = self._get_info()
+
+            if self.render_mode == "human":
+                self._render_frame()
+
+            return observation, reward, terminated, False, info
 
     def render(self):
         if self.render_mode == "rgb_array":
