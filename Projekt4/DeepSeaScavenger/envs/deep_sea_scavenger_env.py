@@ -145,8 +145,29 @@ class DeepSeaScavenger(gym.Env):
                  return True
         return False
     
-    def _cast_rays(self):
-        return np.zeros(12, dtype=np.float32)
+    def _cast_rays(self, dist):
+        num_rays = 12
+        steps = 10 
+        
+        angles = np.linspace(0, 2 * np.pi, num_rays, endpoint=False)
+        dists = np.linspace(0, dist, steps)
+        
+        dx = np.sin(angles)[:, np.newaxis]
+        dy = np.cos(angles)[:, np.newaxis]
+        
+        test_x = (self.x + dx * dists).astype(int)
+        test_y = (self.y + dy * dists)
+        
+        test_x = np.clip(test_x, 0, self.window_size - 1)
+        hit = test_y >= self.floor_heights[test_x]
+        
+        readings = np.ones(num_rays, dtype=np.float32)
+        for i in range(num_rays):
+            hits = np.where(hit[i])[0]
+            if hits.size > 0:
+                readings[i] = dists[hits[0]] / dist
+                
+        return readings
 
     def step(self, action):
             # Reading action
@@ -168,7 +189,9 @@ class DeepSeaScavenger(gym.Env):
             self.oxygen -= 0.001
             if self.is_sonar_active:
                 self.oxygen -= 0.005
-                self.sonar_readings = self._cast_rays() # TBI
+                self.sonar_readings = self._cast_rays(dist=150)
+            else:
+                self.sonar_readings = self._cast_rays(dist=50)
 
             # Check for termination condition (hit the bottom or ran out of oxygen)
             terminated = self.oxygen <= 0 or self._check_collision()
@@ -220,6 +243,23 @@ class DeepSeaScavenger(gym.Env):
             rect = rotated_surf.get_rect(center=(int(self.x), int(self.y)))
             canvas.blit(rotated_surf, rect.topleft)
 
+            # Sonar rays
+            num_rays = 12
+            dist = 150.0 if self.is_sonar_active > 0.5 else 50.0
+            angles = np.linspace(0, 2 * np.pi, num_rays, endpoint=False)
+            
+            for i, angle in enumerate(angles):
+                dx = np.sin(angle)
+                dy = np.cos(angle)
+                
+                dist = self.sonar_readings[i] * dist
+                
+                color = (255, 0, 0) if self.sonar_readings[i] < 1.0 else (0, 255, 0)
+                
+                start_pos = (int(self.x), int(self.y))
+                end_pos = (int(self.x + dx * dist), int(self.y + dy * dist))
+                pygame.draw.line(canvas, color, start_pos, end_pos, 2)
+
             # Rendering
             if self.render_mode == "human":
                 self.window.blit(canvas, canvas.get_rect())
@@ -243,22 +283,18 @@ obs, info = env.reset()
 
 running = True
 while running:
-    # Pobieranie stanu klawiatury
     keys = pygame.key.get_pressed()
     
-    # Tworzenie akcji [engine, torque, sonar]
     action = [0.0, 0.0, 0.0]
     
-    if keys[pygame.K_UP]:    action[0] = 1.0   # Silnik do przodu
-    if keys[pygame.K_DOWN]:  action[0] = -1.0  # Silnik do tyłu
-    if keys[pygame.K_LEFT]:  action[1] = -1.0  # Obrót w lewo
-    if keys[pygame.K_RIGHT]: action[1] = 1.0   # Obrót w prawo
-    if keys[pygame.K_SPACE]: action[2] = 1.0   # Sonar
+    if keys[pygame.K_UP]:    action[0] = 1.0
+    if keys[pygame.K_DOWN]:  action[0] = -1.0
+    if keys[pygame.K_LEFT]:  action[1] = -1.0
+    if keys[pygame.K_RIGHT]: action[1] = 1.0
+    if keys[pygame.K_SPACE]: action[2] = 1.0
     
-    # Wykonywanie kroku
     obs, reward, terminated, truncated, info = env.step(np.array(action, dtype=np.float32))
     
-    # Obsługa zamknięcia okna
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
