@@ -10,6 +10,12 @@ class DeepSeaScavenger(gym.Env):
 
     def __init__(self, render_mode=None):
         self.window_size = 768
+        self.x, self.y = 0.0, 0.0
+        self.torque, self.angle, self.speed = 0.0, 0.0, 0.0
+        self.oxygen = 1.0
+        self.is_sonar_active = 0.0
+        self.sonar_readings = np.zeros(12, dtype=np.float32)
+        self.treasure_pos = np.zeros(2, dtype=np.float32)
 
         """
         Observation Space:
@@ -111,7 +117,7 @@ class DeepSeaScavenger(gym.Env):
             self.x += np.cos(self.angle) * self.speed
             self.y += np.sin(self.angle) * self.speed
 
-            # sonar and oxygen
+            # Sonar and oxygen
             self.is_sonar_active = 1.0 if sonar_req > 0.5 else 0.0
             self.oxygen -= 0.001
             if self.is_sonar_active:
@@ -140,67 +146,36 @@ class DeepSeaScavenger(gym.Env):
             return self._render_frame()
 
     def _render_frame(self):
-        if self.window is None and self.render_mode == "human":
-            pygame.init()
-            pygame.display.init()
-            self.window = pygame.display.set_mode((self.window_size, self.window_size))
-        if self.clock is None and self.render_mode == "human":
-            self.clock = pygame.time.Clock()
+            if self.window is None and self.render_mode == "human":
+                pygame.init()
+                pygame.display.init()
+                self.window = pygame.display.set_mode((self.window_size, self.window_size))
+            if self.clock is None and self.render_mode == "human":
+                self.clock = pygame.time.Clock()
 
-        canvas = pygame.Surface((self.window_size, self.window_size))
-        canvas.fill((255, 255, 255))
-        pix_square_size = (
-            self.window_size / self.size
-        )  # The size of a single grid square in pixels
+            canvas = pygame.Surface((self.window_size, self.window_size))
+            canvas.fill((20, 20, 50))
 
-        # First we draw the target
-        pygame.draw.rect(
-            canvas,
-            (255, 0, 0),
-            pygame.Rect(
-                pix_square_size * self._target_location,
-                (pix_square_size, pix_square_size),
-            ),
-        )
-        # Now we draw the agent
-        pygame.draw.circle(
-            canvas,
-            (0, 0, 255),
-            (self._agent_location + 0.5) * pix_square_size,
-            pix_square_size / 3,
-        )
+            # Displaying treasure chest
+            pygame.draw.circle(canvas, (255, 215, 0), self.treasure_pos.astype(int), 10)
 
-        # Finally, add some gridlines
-        for x in range(self.size + 1):
-            pygame.draw.line(
-                canvas,
-                0,
-                (0, pix_square_size * x),
-                (self.window_size, pix_square_size * x),
-                width=3,
-            )
-            pygame.draw.line(
-                canvas,
-                0,
-                (pix_square_size * x, 0),
-                (pix_square_size * x, self.window_size),
-                width=3,
-            )
+            # Displaying submarine
+            agent_pos = np.array([self.x, self.y]).astype(int)
+            pygame.draw.circle(canvas, (0, 255, 255), agent_pos, 15)
+            
+            end_pos = agent_pos + np.array([np.cos(self.angle), np.sin(self.angle)]) * 25
+            pygame.draw.line(canvas, (255, 255, 255), agent_pos, end_pos.astype(int), 3)
 
-        if self.render_mode == "human":
-            # The following line copies our drawings from `canvas` to the visible window
-            self.window.blit(canvas, canvas.get_rect())
-            pygame.event.pump()
-            pygame.display.update()
-
-            # We need to ensure that human-rendering occurs at the predefined framerate.
-            # The following line will automatically add a delay to
-            # keep the framerate stable.
-            self.clock.tick(self.metadata["render_fps"])
-        else:  # rgb_array
-            return np.transpose(
-                np.array(pygame.surfarray.pixels3d(canvas)), axes=(1, 0, 2)
-            )
+            # Rendering
+            if self.render_mode == "human":
+                self.window.blit(canvas, canvas.get_rect())
+                pygame.event.pump()
+                pygame.display.update()
+                self.clock.tick(self.metadata["render_fps"])
+            else:
+                return np.transpose(
+                    np.array(pygame.surfarray.pixels3d(canvas)), axes=(1, 0, 2)
+                )
 
     def close(self):
         if self.window is not None:
@@ -389,3 +364,16 @@ class DeepSeaScavenger(gym.Env):
 #         if self.window is not None:
 #             pygame.display.quit()
 #             pygame.quit()
+
+env = DeepSeaScavenger(render_mode="human")
+obs, info = env.reset()
+
+for _ in range(100):
+    # Losowa akcja: [engine, torque, sonar]
+    action = env.action_space.sample() 
+    obs, reward, terminated, truncated, info = env.step(action)
+    
+    if terminated:
+        obs, info = env.reset()
+
+env.close()
