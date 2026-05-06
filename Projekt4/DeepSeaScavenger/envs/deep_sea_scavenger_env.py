@@ -101,6 +101,12 @@ class DeepSeaScavenger(gym.Env):
                 self._render_frame()
 
             return observation, info
+    
+    def _check_collision(self):
+        return False
+    
+    def _cast_rays(self):
+        return np.zeros(12, dtype=np.float32)
 
     def step(self, action):
             # Reading action
