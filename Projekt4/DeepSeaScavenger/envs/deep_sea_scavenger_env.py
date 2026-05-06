@@ -11,6 +11,8 @@ class DeepSeaScavenger(gym.Env):
     def __init__(self, render_mode=None):
         self.window_size = 768
         self.x, self.y = 0.0, 0.0
+        self.ship_width = 40.0
+        self.ship_height = 20.0
         self.torque, self.angle, self.speed = 0.0, 0.0, 0.0
         self.oxygen = 1.0
         self.is_sonar_active = 0.0
@@ -119,13 +121,28 @@ class DeepSeaScavenger(gym.Env):
             return observation, info
     
     def _check_collision(self):
-        if self.x < 0 or self.x >= self.window_size:
-            return True
+        hw = self.ship_width / 2
+        hh = self.ship_height / 2
         
-        current_floor_height = self.floor_heights[int(self.x)]
-        if self.y >= current_floor_height:
-            return True
+        vertices = [
+            (-hw, -hh), (hw, -hh), (hw, hh), (-hw, hh)
+        ]
+        
+        cos_a = np.cos(self.angle)
+        sin_a = np.sin(self.angle)
+        
+        for vx, vy in vertices:
+            rx = vx * cos_a - vy * sin_a
+            ry = vx * sin_a + vy * cos_a
             
+            world_x = int(self.x + rx)
+            world_y = self.y + ry
+            
+            if 0 <= world_x < self.window_size:
+                if world_y >= self.floor_heights[world_x]:
+                    return True
+            else:
+                 return True
         return False
     
     def _cast_rays(self):
@@ -196,11 +213,12 @@ class DeepSeaScavenger(gym.Env):
             pygame.draw.circle(canvas, (255, 215, 0), self.treasure_pos.astype(int), 10)
 
             # Displaying submarine
-            agent_pos = np.array([self.x, self.y]).astype(int)
-            pygame.draw.circle(canvas, (0, 255, 255), agent_pos, 15)
+            surface = pygame.Surface((self.ship_width, self.ship_height), pygame.SRCALPHA)
+            surface.fill((0, 50, 150))
             
-            end_pos = agent_pos + np.array([np.cos(self.angle), np.sin(self.angle)]) * 25
-            pygame.draw.line(canvas, (255, 255, 255), agent_pos, end_pos.astype(int), 3)
+            rotated_surf = pygame.transform.rotate(surface, -np.degrees(self.angle))
+            rect = rotated_surf.get_rect(center=(int(self.x), int(self.y)))
+            canvas.blit(rotated_surf, rect.topleft)
 
             # Rendering
             if self.render_mode == "human":
