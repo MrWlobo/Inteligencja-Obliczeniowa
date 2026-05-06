@@ -131,9 +131,9 @@ class DeepSeaScavenger(gym.Env):
             sonar_req = action[2]
 
             # Physics
-            self.angle += torque * 0.1
-            self.speed += engine * 0.05
-            self.speed = np.clip(self.speed, -0.5, 1.0)
+            self.angle += torque * 0.2
+            self.speed += engine * 0.5
+            self.speed = np.clip(self.speed, -5, 10.0)
             
             # Updating the position of the submarine
             self.x += np.cos(self.angle) * self.speed
@@ -216,11 +216,29 @@ class DeepSeaScavenger(gym.Env):
 env = DeepSeaScavenger(render_mode="human")
 obs, info = env.reset()
 
-for _ in range(100):
-    action = env.action_space.sample() 
-    obs, reward, terminated, truncated, info = env.step(action)
+running = True
+while running:
+    # Pobieranie stanu klawiatury
+    keys = pygame.key.get_pressed()
     
-    if terminated:
+    # Tworzenie akcji [engine, torque, sonar]
+    action = [0.0, 0.0, 0.0]
+    
+    if keys[pygame.K_UP]:    action[0] = 1.0   # Silnik do przodu
+    if keys[pygame.K_DOWN]:  action[0] = -1.0  # Silnik do tyłu
+    if keys[pygame.K_LEFT]:  action[1] = -1.0  # Obrót w lewo
+    if keys[pygame.K_RIGHT]: action[1] = 1.0   # Obrót w prawo
+    if keys[pygame.K_SPACE]: action[2] = 1.0   # Sonar
+    
+    # Wykonywanie kroku
+    obs, reward, terminated, truncated, info = env.step(np.array(action, dtype=np.float32))
+    
+    # Obsługa zamknięcia okna
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+            
+    if terminated or truncated:
         obs, info = env.reset()
 
 env.close()
