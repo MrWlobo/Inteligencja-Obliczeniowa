@@ -119,6 +119,13 @@ class DeepSeaScavenger(gym.Env):
             return observation, info
     
     def _check_collision(self):
+        if self.x < 0 or self.x >= self.window_size:
+            return True
+        
+        current_floor_height = self.floor_heights[int(self.x)]
+        if self.y >= current_floor_height:
+            return True
+            
         return False
     
     def _cast_rays(self):
@@ -132,7 +139,7 @@ class DeepSeaScavenger(gym.Env):
 
             # Physics
             self.angle += torque * 0.2
-            self.speed += engine * 0.5
+            self.speed += engine * 0.3
             self.speed = np.clip(self.speed, -5, 10.0)
             
             # Updating the position of the submarine
