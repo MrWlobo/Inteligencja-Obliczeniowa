@@ -16,6 +16,7 @@ class DeepSeaScavenger(gym.Env):
         self.is_sonar_active = 0.0
         self.sonar_readings = np.zeros(12, dtype=np.float32)
         self.treasure_pos = np.zeros(2, dtype=np.float32)
+        self.floor_heights = None
 
         """
         Observation Space:
@@ -89,6 +90,23 @@ class DeepSeaScavenger(gym.Env):
             self.is_sonar_active = 0.0
             self.sonar_readings = np.zeros(12, dtype=np.float32)
 
+            num_points = 12
+            x_points = np.linspace(0, self.window_size, num_points)
+            y_points = 600 + self.np_random.uniform(-150, 100, num_points)
+            x_all = np.arange(self.window_size)
+            base_terrain = np.interp(x_all, x_points, y_points)
+
+            sine_waves = (
+                np.sin(x_all * 0.02) * 20 + 
+                np.sin(x_all * 0.05) * 10
+            )
+
+            noise = self.np_random.normal(0, 3, self.window_size)
+
+            self.floor_heights = base_terrain + sine_waves + noise
+        
+            self.floor_heights = np.clip(self.floor_heights, 100, self.window_size - 50)
+
             self.treasure_pos = np.array([
                 self.np_random.uniform(100.0, 500.0),
                 self.np_random.uniform(100.0, 500.0)
@@ -161,6 +179,13 @@ class DeepSeaScavenger(gym.Env):
 
             canvas = pygame.Surface((self.window_size, self.window_size))
             canvas.fill((20, 20, 50))
+
+            # Displaying the bottom
+            points = []
+            for x in range(self.window_size):
+                points.append((x, self.floor_heights[x]))
+            
+            pygame.draw.lines(canvas, (100, 100, 100), False, points, 3)
 
             # Displaying treasure chest
             pygame.draw.circle(canvas, (255, 215, 0), self.treasure_pos.astype(int), 10)
