@@ -76,6 +76,12 @@ class DeepSeaScavenger(gym.Env):
         return np.concatenate([state, self.sonar_readings]).astype(np.float32)
 
     def _get_info(self):
+            if not self.treasure_pos:
+                return {
+                    "distance_to_treasure": 0.0,
+                    "treasures_collected": self.treasures_collected
+                }
+    
             return {
                 "distance_to_treasure": np.linalg.norm(
                     np.array([self.x, self.y]) - self.treasure_pos
