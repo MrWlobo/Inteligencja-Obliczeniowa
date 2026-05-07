@@ -6,7 +6,7 @@ import numpy as np
 
 
 class DeepSeaScavenger(gym.Env):
-    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
+    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 30}
 
     def __init__(self, render_mode=None):
         self.window_size = 768
@@ -64,6 +64,8 @@ class DeepSeaScavenger(gym.Env):
         """
         self.window = None
         self.clock = None
+        self.static_canvas = None
+        self.bubbles = []
 
     def _get_obs(self):
         state = np.array([
@@ -119,6 +121,10 @@ class DeepSeaScavenger(gym.Env):
                 treasure_y = self.floor_heights[int(treasure_x)] - 15
                 self.treasure_pos.append((treasure_x, treasure_y))
 
+            self.static_canvas = None
+            self.bubbles = []
+            self._create_static_render()
+
             observation = self._get_obs()
             info = self._get_info()
 
@@ -127,6 +133,44 @@ class DeepSeaScavenger(gym.Env):
 
             return observation, info
     
+    def _create_static_render(self):
+            if self.static_canvas is not None:
+                return
+
+            bg = pygame.Surface((self.window_size, self.window_size), pygame.SRCALPHA)
+            top_color = np.array((25, 70, 130), dtype=np.uint8)
+            bottom_color = np.array((3, 12, 45), dtype=np.uint8)
+            for y in range(self.window_size):
+                ratio = y / self.window_size
+                row_color = tuple((top_color * (1 - ratio) + bottom_color * ratio).astype(np.uint8))
+                pygame.draw.line(bg, row_color, (0, y), (self.window_size, y))
+
+            pygame.draw.rect(bg, (50, 160, 220, 180), pygame.Rect(0, 0, self.window_size, 100))
+            for i in range(5):
+                wave_x = int((i * 140) % self.window_size)
+                pygame.draw.arc(bg, (180, 220, 240, 70), (wave_x - 90, 20, 180, 30), 3.14, 2 * 3.14, 2)
+
+            seabed = [(0, self.window_size)]
+            for x in range(0, self.window_size, 5):
+                seabed.append((x, int(self.floor_heights[x])))
+            seabed.append((self.window_size - 1, self.window_size))
+            pygame.draw.polygon(bg, (110, 90, 40), seabed)
+            pygame.draw.lines(bg, (80, 65, 30), False, seabed[1:-1], 4)
+
+            for treasure in self.treasure_pos:
+                tx, ty = int(treasure[0]), int(treasure[1])
+                chest_w, chest_h = 22, 16
+                base_rect = pygame.Rect(tx - chest_w // 2, ty - chest_h // 2, chest_w, chest_h)
+                pygame.draw.rect(bg, (210, 145, 60), base_rect)
+                pygame.draw.rect(bg, (170, 100, 30), base_rect, 2)
+                lid = pygame.Rect(base_rect.x, base_rect.y - 6, chest_w, 8)
+                pygame.draw.rect(bg, (180, 120, 50), lid)
+                pygame.draw.rect(bg, (140, 90, 25), lid, 2)
+                pygame.draw.circle(bg, (200, 200, 100), (tx, ty), 4)
+                pygame.draw.line(bg, (140, 90, 25), (tx, ty - 4), (tx, ty + 4), 2)
+
+            self.static_canvas = bg
+
     def _check_collision(self):
         hw = self.ship_width / 2
         hh = self.ship_height / 2
@@ -183,9 +227,9 @@ class DeepSeaScavenger(gym.Env):
             sonar_req = action[2]
 
             # Physics
-            self.angle += torque * 0.2
-            self.speed += engine * 0.3
-            self.speed = np.clip(self.speed, -5, 10.0)
+            self.angle += torque * 0.025
+            self.speed += engine * 0.0375
+            self.speed = np.clip(self.speed, -0.625, 1.25)
             
             # Updating the position of the submarine
             self.x += np.cos(self.angle) * self.speed
@@ -198,19 +242,43 @@ class DeepSeaScavenger(gym.Env):
                 self.vy = 0
 
             if self.y - (self.ship_height / 2) <= 101:
-                self.oxygen += 8 
+                self.oxygen += 1 
                 if self.oxygen > self.max_oxygen:
                     self.oxygen = self.max_oxygen
 
             # Sonar and oxygen
             self.is_sonar_active = 1.0 if sonar_req > 0.5 else 0.0
-            self.oxygen -= 0.2
+            self.oxygen -= 0.025
             if self.is_sonar_active:
-                self.oxygen -= 3
+                self.oxygen -= 0.375
                 self.sonar_readings = self._cast_rays(dist=150)
             else:
                 self.sonar_readings = self._cast_rays(dist=50)
 
+            # Animated bubbles rising behind the sub
+            for bubble in self.bubbles:
+                bubble["y"] -= bubble["speed"]
+                bubble["x"] += bubble["drift"]
+                bubble["alpha"] = max(0, bubble["alpha"] - 1)
+                bubble["life"] -= 1
+            self.bubbles = [bubble for bubble in self.bubbles if bubble["life"] > 0 and bubble["alpha"] > 0 and bubble["y"] > 100]
+
+            if len(self.bubbles) < 25 and abs(self.speed) > 0.05:
+                for _ in range(2):
+                    drift = float(self.np_random.uniform(-0.35, 0.35))
+                    speed = float(self.np_random.uniform(0.9, 1.8))
+                    radius = int(self.np_random.integers(2, 5))
+                    offset_x = float(self.np_random.uniform(-6, 6))
+                    offset_y = float(self.np_random.uniform(4, 12))
+                    self.bubbles.append({
+                        "x": self.x - np.cos(self.angle) * offset_y + np.sin(self.angle) * offset_x,
+                        "y": self.y - np.sin(self.angle) * offset_y - np.cos(self.angle) * offset_x,
+                        "radius": radius,
+                        "speed": speed,
+                        "drift": drift,
+                        "alpha": 180,
+                        "life": 40 + int(self.np_random.integers(0, 20))
+                    })
 
             # Check for termination condition (hit the bottom or ran out of oxygen)
             terminated = self.oxygen <= 0 or self._check_collision()
@@ -257,66 +325,95 @@ class DeepSeaScavenger(gym.Env):
             if self.clock is None and self.render_mode == "human":
                 self.clock = pygame.time.Clock()
 
-            # Background (ocean)
-            canvas = pygame.Surface((self.window_size, self.window_size))
-            canvas.fill((20, 20, 50))
+            if self.static_canvas is None:
+                self._create_static_render()
 
-            # Surface
-            surface_rect = pygame.Rect(0, 0, self.window_size, 100)
-            pygame.draw.rect(canvas, (0, 150, 255), surface_rect)
+            canvas = self.static_canvas.copy()
 
-            # Displaying the bottom
-            points = []
-            for x in range(self.window_size):
-                points.append((x, self.floor_heights[x]))
-            
-            pygame.draw.lines(canvas, (100, 100, 100), False, points, 3)
+            # Submarine body
+            sub_w = int(self.ship_width * 1.8)
+            sub_h = int(self.ship_height * 1.5)
+            sub_surface = pygame.Surface((sub_w, sub_h), pygame.SRCALPHA)
+            pygame.draw.ellipse(sub_surface, (20, 90, 140), pygame.Rect(0, 0, sub_w, sub_h))
+            pygame.draw.ellipse(sub_surface, (10, 45, 80), pygame.Rect(0, 0, sub_w, sub_h), 4)
+            pygame.draw.rect(sub_surface, (25, 110, 175), pygame.Rect(sub_w // 3, sub_h // 4, sub_w // 2, sub_h // 2), border_radius=12)
+            pygame.draw.circle(sub_surface, (170, 220, 240), (sub_w * 3 // 4, sub_h // 2), sub_h // 4)
+            pygame.draw.circle(sub_surface, (20, 40, 60), (sub_w * 3 // 4, sub_h // 2), sub_h // 5)
+            pygame.draw.polygon(sub_surface, (20, 90, 140), [(0, sub_h // 2), (sub_w // 6, sub_h // 3), (sub_w // 6, sub_h * 2 // 3)])
+            pygame.draw.rect(sub_surface, (20, 90, 140), pygame.Rect(sub_w // 2 - 4, 0, 8, sub_h // 3), border_radius=3)
+            pygame.draw.circle(sub_surface, (170, 220, 240), (sub_w // 2, 4), 4)
 
-            # Displaying treasure chest
-            for treasure in self.treasure_pos:
-                pygame.draw.circle(canvas, (255, 215, 0), treasure, 10)
-
-            # Displaying submarine
-            surface = pygame.Surface((self.ship_width, self.ship_height), pygame.SRCALPHA)
-            surface.fill((0, 50, 150))
-            
-            rotated_surf = pygame.transform.rotate(surface, -np.degrees(self.angle))
+            rotated_surf = pygame.transform.rotate(sub_surface, -np.degrees(self.angle))
             rect = rotated_surf.get_rect(center=(int(self.x), int(self.y)))
             canvas.blit(rotated_surf, rect.topleft)
 
-            # Sonar rays
-            num_rays = 12
-            dist = 150.0 if self.is_sonar_active > 0.5 else 30.0
-            angles = np.linspace(0, 2 * np.pi, num_rays, endpoint=False)
-            
-            for i, angle in enumerate(angles):
+            # Sonar bubble and rays
+            if self.is_sonar_active > 0.5:
+                sonar_surf = pygame.Surface((self.window_size, self.window_size), pygame.SRCALPHA)
+                pygame.draw.circle(sonar_surf, (120, 220, 220, 30), (int(self.x), int(self.y)), 150, 2)
+                pygame.draw.circle(sonar_surf, (120, 220, 220, 20), (int(self.x), int(self.y)), 100, 1)
+                canvas.blit(sonar_surf, (0, 0))
+
+            ray_count = 12
+            ray_angles = np.linspace(0, 2 * np.pi, ray_count, endpoint=False)
+            base_range = 150.0 if self.is_sonar_active > 0.5 else 50.0
+            for i, angle in enumerate(ray_angles):
                 dx = np.sin(angle)
                 dy = np.cos(angle)
-                
-                dist = self.sonar_readings[i] * dist
-                
-                color = (255, 0, 0) if self.sonar_readings[i] < 1.0 else (0, 255, 0)
-                
-                start_pos = (int(self.x), int(self.y))
-                end_pos = (int(self.x + dx * dist), int(self.y + dy * dist))
-                pygame.draw.line(canvas, color, start_pos, end_pos, 2)
+                ray_len = self.sonar_readings[i] * base_range
+                color = (120, 240, 255) if self.is_sonar_active > 0.5 else (160, 220, 255)
+                alpha = 180 if self.sonar_readings[i] < 1.0 else 90
+                ray_surface = pygame.Surface((self.window_size, self.window_size), pygame.SRCALPHA)
+                pygame.draw.line(ray_surface, color + (alpha,), (int(self.x), int(self.y)), (int(self.x + dx * ray_len), int(self.y + dy * ray_len)), 2)
+                canvas.blit(ray_surface, (0, 0))
 
-            # Oxygen level
+            # Animated rising bubbles behind the submarine
+            trail_surface = pygame.Surface((self.window_size, self.window_size), pygame.SRCALPHA)
+            for bubble in self.bubbles:
+                alpha = max(0, min(255, int(bubble["alpha"])))
+                color = (200, 230, 255, alpha)
+                pygame.draw.circle(trail_surface, color, (int(bubble["x"]), int(bubble["y"])), bubble["radius"])
+            canvas.blit(trail_surface, (0, 0))
+
+            # Visibility mask for human play: only sonar circle + surface are clear
+            if self.render_mode == "human":
+                view_radius = int(base_range + 30)
+                mask_overlay = pygame.Surface((self.window_size, self.window_size), pygame.SRCALPHA)
+                mask_overlay.fill((0, 0, 0, 220))
+                pygame.draw.rect(mask_overlay, (0, 0, 0, 0), pygame.Rect(0, 0, self.window_size, 100))
+                pygame.draw.circle(mask_overlay, (0, 0, 0, 0), (int(self.x), int(self.y)), view_radius)
+                pygame.draw.circle(mask_overlay, (120, 220, 255, 40), (int(self.x), int(self.y)), view_radius, 2)
+                canvas.blit(mask_overlay, (0, 0))
+
+            # HUD panel
             if self.font is None:
                 pygame.font.init()
-                self.font = pygame.font.SysFont("Arial", 24, bold=True)
+                self.font = pygame.font.SysFont("Arial", 22, bold=True)
+
+            hud_bg = pygame.Surface((260, 90), pygame.SRCALPHA)
+            hud_bg.fill((10, 10, 30, 180))
+            pygame.draw.rect(hud_bg, (80, 180, 220, 200), hud_bg.get_rect(), border_radius=10)
+            pygame.draw.rect(hud_bg, (20, 120, 170, 200), hud_bg.get_rect(), 2, border_radius=10)
+            canvas.blit(hud_bg, (20, 20))
 
             oxygen_text = f"Oxygen: {int(self.oxygen)} / {int(self.max_oxygen)}"
-            
-            if self.oxygen > 50:
-                text_color = (100, 255, 100)
-            elif self.oxygen > 20:
-                text_color = (255, 255, 0)
-            else:
-                text_color = (255, 50, 50)
-                
-            text_surface = self.font.render(oxygen_text, True, text_color)
-            canvas.blit(text_surface, (20, 20))
+            sonar_text = "SONAR: ON" if self.is_sonar_active > 0.5 else "SONAR: OFF"
+            treasure_text = f"Crates: {len(self.treasure_pos)}"
+
+            oxygen_surface = self.font.render(oxygen_text, True, (220, 240, 255))
+            sonar_surface = self.font.render(sonar_text, True, (200, 220, 255))
+            treasure_surface = self.font.render(treasure_text, True, (220, 220, 140))
+            canvas.blit(oxygen_surface, (32, 28))
+            canvas.blit(sonar_surface, (32, 52))
+            canvas.blit(treasure_surface, (32, 76))
+
+            # Oxygen bar
+            bar_x, bar_y, bar_w, bar_h = 32, 98, 216, 12
+            pygame.draw.rect(canvas, (40, 60, 80), (bar_x, bar_y, bar_w, bar_h), border_radius=6)
+            fill_w = int(bar_w * max(0.0, min(1.0, self.oxygen / self.max_oxygen)))
+            bar_color = (80, 220, 120) if self.oxygen > 40 else (240, 190, 40) if self.oxygen > 15 else (240, 80, 80)
+            pygame.draw.rect(canvas, bar_color, (bar_x, bar_y, fill_w, bar_h), border_radius=6)
+            pygame.draw.rect(canvas, (180, 220, 240), (bar_x, bar_y, bar_w, bar_h), 2, border_radius=6)
 
             # Rendering
             if self.render_mode == "human":
