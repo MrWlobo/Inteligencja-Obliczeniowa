@@ -95,6 +95,8 @@ class DeepSeaScavenger(gym.Env):
             self.is_sonar_active = 0.0
             self.sonar_readings = np.zeros(12, dtype=np.float32)
 
+            self.treasure_pos = []
+
             num_points = 12
             x_points = np.linspace(0, self.window_size, num_points)
             y_points = 600 + self.np_random.uniform(-150, 100, num_points)
@@ -113,7 +115,7 @@ class DeepSeaScavenger(gym.Env):
 
             for _ in range(3):
                 treasure_x = self.np_random.integers(50, self.window_size - 50)
-                treasure_y = self.floor_heights[int(treasure_x)]
+                treasure_y = self.floor_heights[int(treasure_x)] - 15
                 self.treasure_pos.append((treasure_x, treasure_y))
 
             observation = self._get_obs()
@@ -190,12 +192,12 @@ class DeepSeaScavenger(gym.Env):
 
             # Sonar and oxygen
             self.is_sonar_active = 1.0 if sonar_req > 0.5 else 0.0
-            self.oxygen -= 0.5
+            self.oxygen -= 0.2
             if self.is_sonar_active:
-                self.oxygen -= 5
+                self.oxygen -= 3
                 self.sonar_readings = self._cast_rays(dist=150)
             else:
-                self.sonar_readings = self._cast_rays(dist=30)
+                self.sonar_readings = self._cast_rays(dist=50)
 
             # Check for termination condition (hit the bottom or ran out of oxygen)
             terminated = self.oxygen <= 0 or self._check_collision()
