@@ -284,7 +284,6 @@ class DeepSeaScavenger(gym.Env):
             terminated = self.oxygen <= 0 or self._check_collision()
             
             # Reward
-            distance_to_treasure = np.linalg.norm(np.array([self.x, self.y]) - self.treasure_pos)
             reward = -0.1
 
             if terminated:
@@ -298,7 +297,7 @@ class DeepSeaScavenger(gym.Env):
                 curr_treasure_pos = self.treasure_pos[i]
                 dist = np.linalg.norm(np.array([self.x, self.y]) - curr_treasure_pos)
                 
-                if dist < 20.0:
+                if dist < 25.0:
                     reward += 100.0
                     self.treasures_collected += 1
                     self.oxygen = min(self.max_oxygen, self.oxygen + 20)
@@ -354,18 +353,7 @@ class DeepSeaScavenger(gym.Env):
                 pygame.draw.circle(sonar_surf, (120, 220, 220, 20), (int(self.x), int(self.y)), 100, 1)
                 canvas.blit(sonar_surf, (0, 0))
 
-            ray_count = 12
-            ray_angles = np.linspace(0, 2 * np.pi, ray_count, endpoint=False)
             base_range = 150.0 if self.is_sonar_active > 0.5 else 50.0
-            for i, angle in enumerate(ray_angles):
-                dx = np.sin(angle)
-                dy = np.cos(angle)
-                ray_len = self.sonar_readings[i] * base_range
-                color = (120, 240, 255) if self.is_sonar_active > 0.5 else (160, 220, 255)
-                alpha = 180 if self.sonar_readings[i] < 1.0 else 90
-                ray_surface = pygame.Surface((self.window_size, self.window_size), pygame.SRCALPHA)
-                pygame.draw.line(ray_surface, color + (alpha,), (int(self.x), int(self.y)), (int(self.x + dx * ray_len), int(self.y + dy * ray_len)), 2)
-                canvas.blit(ray_surface, (0, 0))
 
             # Animated rising bubbles behind the submarine
             trail_surface = pygame.Surface((self.window_size, self.window_size), pygame.SRCALPHA)
