@@ -157,18 +157,6 @@ class DeepSeaScavenger(gym.Env):
             pygame.draw.polygon(bg, (110, 90, 40), seabed)
             pygame.draw.lines(bg, (80, 65, 30), False, seabed[1:-1], 4)
 
-            for treasure in self.treasure_pos:
-                tx, ty = int(treasure[0]), int(treasure[1])
-                chest_w, chest_h = 22, 16
-                base_rect = pygame.Rect(tx - chest_w // 2, ty - chest_h // 2, chest_w, chest_h)
-                pygame.draw.rect(bg, (210, 145, 60), base_rect)
-                pygame.draw.rect(bg, (170, 100, 30), base_rect, 2)
-                lid = pygame.Rect(base_rect.x, base_rect.y - 6, chest_w, 8)
-                pygame.draw.rect(bg, (180, 120, 50), lid)
-                pygame.draw.rect(bg, (140, 90, 25), lid, 2)
-                pygame.draw.circle(bg, (200, 200, 100), (tx, ty), 4)
-                pygame.draw.line(bg, (140, 90, 25), (tx, ty - 4), (tx, ty + 4), 2)
-
             self.static_canvas = bg
 
     def _check_collision(self):
@@ -345,6 +333,18 @@ class DeepSeaScavenger(gym.Env):
             rotated_surf = pygame.transform.rotate(sub_surface, -np.degrees(self.angle))
             rect = rotated_surf.get_rect(center=(int(self.x), int(self.y)))
             canvas.blit(rotated_surf, rect.topleft)
+
+            for treasure in self.treasure_pos:
+                tx, ty = int(treasure[0]), int(treasure[1])
+                chest_w, chest_h = 22, 16
+                base_rect = pygame.Rect(tx - chest_w // 2, ty - chest_h // 2, chest_w, chest_h)
+                pygame.draw.rect(canvas, (210, 145, 60), base_rect)
+                pygame.draw.rect(canvas, (170, 100, 30), base_rect, 2)
+                lid = pygame.Rect(base_rect.x, base_rect.y - 6, chest_w, 8)
+                pygame.draw.rect(canvas, (180, 120, 50), lid)
+                pygame.draw.rect(canvas, (140, 90, 25), lid, 2)
+                pygame.draw.circle(canvas, (200, 200, 100), (tx, ty), 4)
+                pygame.draw.line(canvas, (140, 90, 25), (tx, ty - 4), (tx, ty + 4), 2)
 
             # Sonar bubble and rays
             if self.is_sonar_active > 0.5:
