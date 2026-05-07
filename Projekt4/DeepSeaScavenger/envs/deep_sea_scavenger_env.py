@@ -10,7 +10,7 @@ class DeepSeaScavenger(gym.Env):
 
     def __init__(self, render_mode=None):
         self.window_size = 768
-        self.x, self.y = 0.0, 0.0
+        self.x, self.y = 100.0, 150.0
         self.ship_width = 40.0
         self.ship_height = 20.0
         self.torque, self.angle, self.speed = 0.0, 0.0, 0.0
@@ -83,9 +83,8 @@ class DeepSeaScavenger(gym.Env):
     def reset(self, seed=None, options=None):
             super().reset(seed=seed)
             
-            self.x = self.np_random.uniform(50.0, 100.0)
-            self.y = self.np_random.uniform(50.0, 100.0)
-            
+            self.x = 100.0
+            self.y = 150.0
             self.torque = 0.0
             self.angle = 0.0
             self.speed = 0.0
@@ -190,6 +189,17 @@ class DeepSeaScavenger(gym.Env):
             self.x += np.cos(self.angle) * self.speed
             self.y += np.sin(self.angle) * self.speed
 
+            # Block swimming over the surface and regenerate oxygen
+            surface_limit = 100 + (self.ship_height / 2)
+            if self.y < surface_limit:
+                self.y = surface_limit
+                self.vy = 0
+
+            if self.y - (self.ship_height / 2) <= 101:
+                self.oxygen += 8 
+                if self.oxygen > self.max_oxygen:
+                    self.oxygen = self.max_oxygen
+
             # Sonar and oxygen
             self.is_sonar_active = 1.0 if sonar_req > 0.5 else 0.0
             self.oxygen -= 0.2
@@ -228,8 +238,13 @@ class DeepSeaScavenger(gym.Env):
             if self.clock is None and self.render_mode == "human":
                 self.clock = pygame.time.Clock()
 
+            # Background (ocean)
             canvas = pygame.Surface((self.window_size, self.window_size))
             canvas.fill((20, 20, 50))
+
+            # Surface
+            surface_rect = pygame.Rect(0, 0, self.window_size, 100)
+            pygame.draw.rect(canvas, (0, 150, 255), surface_rect)
 
             # Displaying the bottom
             points = []
