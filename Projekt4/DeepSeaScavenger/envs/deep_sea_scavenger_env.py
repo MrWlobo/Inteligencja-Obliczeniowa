@@ -14,7 +14,9 @@ class DeepSeaScavenger(gym.Env):
         self.ship_width = 40.0
         self.ship_height = 20.0
         self.torque, self.angle, self.speed = 0.0, 0.0, 0.0
-        self.oxygen = 1.0
+        self.font = None
+        self.max_oxygen = 100.0
+        self.oxygen = 100.0
         self.is_sonar_active = 0.0
         self.sonar_readings = np.zeros(12, dtype=np.float32)
         self.treasure_pos = []
@@ -88,7 +90,8 @@ class DeepSeaScavenger(gym.Env):
             self.angle = 0.0
             self.speed = 0.0
             
-            self.oxygen = 1.0
+            self.oxygen = 100.0
+            self.max_oxygen = 100.0
             self.is_sonar_active = 0.0
             self.sonar_readings = np.zeros(12, dtype=np.float32)
 
@@ -187,9 +190,9 @@ class DeepSeaScavenger(gym.Env):
 
             # Sonar and oxygen
             self.is_sonar_active = 1.0 if sonar_req > 0.5 else 0.0
-            self.oxygen -= 0.001
+            self.oxygen -= 0.5
             if self.is_sonar_active:
-                self.oxygen -= 0.005
+                self.oxygen -= 5
                 self.sonar_readings = self._cast_rays(dist=150)
             else:
                 self.sonar_readings = self._cast_rays(dist=30)
@@ -261,6 +264,23 @@ class DeepSeaScavenger(gym.Env):
                 start_pos = (int(self.x), int(self.y))
                 end_pos = (int(self.x + dx * dist), int(self.y + dy * dist))
                 pygame.draw.line(canvas, color, start_pos, end_pos, 2)
+
+            # Oxygen level
+            if self.font is None:
+                pygame.font.init()
+                self.font = pygame.font.SysFont("Arial", 24, bold=True)
+
+            oxygen_text = f"Oxygen: {int(self.oxygen)} / {int(self.max_oxygen)}"
+            
+            if self.oxygen > 50:
+                text_color = (100, 255, 100)
+            elif self.oxygen > 20:
+                text_color = (255, 255, 0)
+            else:
+                text_color = (255, 50, 50)
+                
+            text_surface = self.font.render(oxygen_text, True, text_color)
+            canvas.blit(text_surface, (20, 20))
 
             # Rendering
             if self.render_mode == "human":
