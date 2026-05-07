@@ -17,7 +17,7 @@ class DeepSeaScavenger(gym.Env):
         self.oxygen = 1.0
         self.is_sonar_active = 0.0
         self.sonar_readings = np.zeros(12, dtype=np.float32)
-        self.treasure_pos = np.zeros(2, dtype=np.float32)
+        self.treasure_pos = []
         self.floor_heights = None
 
         """
@@ -108,9 +108,10 @@ class DeepSeaScavenger(gym.Env):
             self.floor_heights = np.clip(self.floor_heights, 100, self.window_size - 50)
 
 
-            treasure_x = self.np_random.integers(50, self.window_size - 50)
-            treasure_y = self.floor_heights[int(treasure_x)]
-            self.treasure_pos = np.array([float(treasure_x), float(treasure_y - 20)], dtype=np.float32)
+            for _ in range(3):
+                treasure_x = self.np_random.integers(50, self.window_size - 50)
+                treasure_y = self.floor_heights[int(treasure_x)]
+                self.treasure_pos.append((treasure_x, treasure_y))
 
             observation = self._get_obs()
             info = self._get_info()
@@ -191,7 +192,7 @@ class DeepSeaScavenger(gym.Env):
                 self.oxygen -= 0.005
                 self.sonar_readings = self._cast_rays(dist=150)
             else:
-                self.sonar_readings = self._cast_rays(dist=50)
+                self.sonar_readings = self._cast_rays(dist=30)
 
             # Check for termination condition (hit the bottom or ran out of oxygen)
             terminated = self.oxygen <= 0 or self._check_collision()
@@ -233,7 +234,8 @@ class DeepSeaScavenger(gym.Env):
             pygame.draw.lines(canvas, (100, 100, 100), False, points, 3)
 
             # Displaying treasure chest
-            pygame.draw.circle(canvas, (255, 215, 0), self.treasure_pos.astype(int), 10)
+            for treasure in self.treasure_pos:
+                pygame.draw.circle(canvas, (255, 215, 0), treasure, 10)
 
             # Displaying submarine
             surface = pygame.Surface((self.ship_width, self.ship_height), pygame.SRCALPHA)
@@ -245,7 +247,7 @@ class DeepSeaScavenger(gym.Env):
 
             # Sonar rays
             num_rays = 12
-            dist = 150.0 if self.is_sonar_active > 0.5 else 50.0
+            dist = 150.0 if self.is_sonar_active > 0.5 else 30.0
             angles = np.linspace(0, 2 * np.pi, num_rays, endpoint=False)
             
             for i, angle in enumerate(angles):
