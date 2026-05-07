@@ -20,6 +20,7 @@ class DeepSeaScavenger(gym.Env):
         self.is_sonar_active = 0.0
         self.sonar_readings = np.zeros(12, dtype=np.float32)
         self.treasure_pos = []
+        self.treasures_collected = 0
         self.floor_heights = None
 
         """
@@ -95,6 +96,7 @@ class DeepSeaScavenger(gym.Env):
             self.sonar_readings = np.zeros(12, dtype=np.float32)
 
             self.treasure_pos = []
+            self.treasures_collected = 0
 
             num_points = 12
             x_points = np.linspace(0, self.window_size, num_points)
@@ -209,15 +211,32 @@ class DeepSeaScavenger(gym.Env):
             else:
                 self.sonar_readings = self._cast_rays(dist=50)
 
+
             # Check for termination condition (hit the bottom or ran out of oxygen)
             terminated = self.oxygen <= 0 or self._check_collision()
             
             # Reward
-            dist = np.linalg.norm(np.array([self.x, self.y]) - self.treasure_pos)
-            reward = -0.01
-            if dist < 20.0: reward = 10.0
+            distance_to_treasure = np.linalg.norm(np.array([self.x, self.y]) - self.treasure_pos)
+            reward = -0.1
 
-            # 6. Preparing info
+            if terminated:
+                if self.oxygen <= 0:
+                    reward = -20.0
+                else:
+                    reward = -50.0
+
+            # Collecting treasuers
+            for i in range(len(self.treasure_pos) - 1, -1, -1):
+                curr_treasure_pos = self.treasure_pos[i]
+                dist = np.linalg.norm(np.array([self.x, self.y]) - curr_treasure_pos)
+                
+                if dist < 20.0:
+                    reward += 100.0
+                    self.treasures_collected += 1
+                    self.oxygen = min(self.max_oxygen, self.oxygen + 20)
+                    self.treasure_pos.pop(i)
+
+            # Preparing info
             observation = self._get_obs()
             info = self._get_info()
 
