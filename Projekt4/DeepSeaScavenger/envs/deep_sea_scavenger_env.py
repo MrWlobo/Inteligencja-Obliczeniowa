@@ -276,6 +276,7 @@ class DeepSeaScavenger(gym.Env):
 
             # Check for termination condition (hit the bottom or ran out of oxygen)
             terminated = self.oxygen <= 0 or self._check_collision()
+            completed = len(self.treasure_pos) == 0
             
             # Reward
             reward = -0.1
@@ -285,6 +286,9 @@ class DeepSeaScavenger(gym.Env):
                     reward = -20.0
                 else:
                     reward = -50.0
+
+            if completed:
+                reward = 500.0
 
             # Collecting treasuers
             for i in range(len(self.treasure_pos) - 1, -1, -1):
@@ -304,7 +308,7 @@ class DeepSeaScavenger(gym.Env):
             if self.render_mode == "human":
                 self._render_frame()
 
-            return observation, reward, terminated, False, info
+            return observation, reward, (terminated or completed), False, info
 
     def render(self):
         if self.render_mode == "rgb_array":
