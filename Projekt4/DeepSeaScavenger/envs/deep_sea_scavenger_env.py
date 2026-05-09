@@ -67,10 +67,34 @@ class DeepSeaScavenger(gym.Env):
         self.static_canvas = None
         self.bubbles = []
 
-    def _get_obs(self):
+    def _get_obs(self, horizon):
+        nearest_treasure_dist = float('inf')
+        target_vector = np.array([0.0, 0.0], dtype=np.float32)
+        is_visible = 0.0
+
+        if self.treasure_pos:
+            my_pos = np.array([self.x, self.y])
+            dists = [np.linalg.norm(my_pos - np.array(t)) for t in self.treasure_pos]
+            min_idx = np.argmin(dists)
+            nearest_treasure_dist = dists[min_idx]
+
+            if nearest_treasure_dist <= horizon:
+                is_visible = 1.0
+                target_vector[0] = (self.treasure_pos[min_idx][0] - self.x) / horizon
+                target_vector[1] = (self.treasure_pos[min_idx][1] - self.y) / horizon
+
         state = np.array([
-            self.x, self.y, self.torque, self.angle, 
-            self.speed, self.oxygen, float(self.is_sonar_active)
+            self.x / self.window_size,
+            self.y / self.window_size,
+            self.torque, 
+            self.angle / (2 * np.pi),
+            self.speed / 1.25,
+            self.oxygen / 100.0,
+            float(self.is_sonar_active),
+            is_visible,
+            target_vector[0],
+            target_vector[1],
+            horizon / 150.0
         ], dtype=np.float32)
         
         return np.concatenate([state, self.sonar_readings]).astype(np.float32)
@@ -131,7 +155,7 @@ class DeepSeaScavenger(gym.Env):
             self.bubbles = []
             self._create_static_render()
 
-            observation = self._get_obs()
+            observation = self._get_obs(50.0)
             info = self._get_info()
 
             if self.render_mode == "human":
@@ -200,19 +224,37 @@ class DeepSeaScavenger(gym.Env):
         dx = np.sin(angles)[:, np.newaxis]
         dy = np.cos(angles)[:, np.newaxis]
         
-        test_x = (self.x + dx * dists).astype(int)
-        test_y = (self.y + dy * dists)
+        test_x_raw = self.x + dx * dists
+        test_y = self.y + dy * dists
         
-        test_x = np.clip(test_x, 0, self.window_size - 1)
-        hit = test_y >= self.floor_heights[test_x]
+        test_x_idx = np.clip(test_x_raw.astype(int), 0, self.window_size - 1)
+        
+        hit_floor = test_y >= self.floor_heights[test_x_idx]
         
         readings = np.ones(num_rays, dtype=np.float32)
         for i in range(num_rays):
-            hits = np.where(hit[i])[0]
-            if hits.size > 0:
-                readings[i] = dists[hits[0]] / dist
+            for j in range(steps):
+                curr_x = test_x_raw[i, j]
+                curr_y = test_y[i, j]
                 
+                is_wall_hit = curr_x <= 0 or curr_x >= self.window_size - 1
+                is_floor_hit = hit_floor[i, j]
+                
+                if is_wall_hit or is_floor_hit:
+                    readings[i] = dists[j] / dist
+                    break
+                    
         return readings
+    
+    def _get_nearest_treasure(self):
+        if not self.treasures:
+            return None, float('inf')
+        
+        my_pos = np.array([self.x, self.y])
+        distances = [np.linalg.norm(my_pos - np.array(t)) for t in self.treasures]
+        min_idx = np.argmin(distances)
+        
+        return self.treasures[min_idx], distances[min_idx]
 
     def step(self, action):
             # Reading action
@@ -243,11 +285,13 @@ class DeepSeaScavenger(gym.Env):
             # Sonar and oxygen
             self.is_sonar_active = 1.0 if sonar_req > 0.5 else 0.0
             self.oxygen -= 0.025
+            horizon = 50
             if self.is_sonar_active:
                 self.oxygen -= 0.375
-                self.sonar_readings = self._cast_rays(dist=150)
+                horizon = 150
+                self.sonar_readings = self._cast_rays(dist=horizon)
             else:
-                self.sonar_readings = self._cast_rays(dist=50)
+                self.sonar_readings = self._cast_rays(dist=horizon)
 
             # Animated bubbles rising behind the sub
             for bubble in self.bubbles:
@@ -302,7 +346,7 @@ class DeepSeaScavenger(gym.Env):
                     self.treasure_pos.pop(i)
 
             # Preparing info
-            observation = self._get_obs()
+            observation = self._get_obs(horizon)
             info = self._get_info()
 
             if self.render_mode == "human":
