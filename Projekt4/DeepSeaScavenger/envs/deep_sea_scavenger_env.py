@@ -22,21 +22,11 @@ class DeepSeaScavenger(gym.Env):
         self.treasure_pos = []
         self.treasures_collected = 0
         self.floor_heights = None
+        self.prev_treasure_dist = float("inf")
 
-        """
-        Observation Space:
-            - Submarine coordinates (x and y)
-            - Torque
-            - Angle
-            - Speed
-            - Oxygen level
-            - Sonar activity
-            - 12 sonar readings
-        19 features overall
-        """
         self.observation_space = spaces.Box(
                     low=-np.inf, high=np.inf, 
-                    shape=(19,), 
+                    shape=(23,),
                     dtype=np.float32
                 )
 
@@ -113,6 +103,13 @@ class DeepSeaScavenger(gym.Env):
                 "oxygen_left": self.oxygen
             }
 
+    def _get_distance_to_nearest_treasure(self):
+        if not self.treasure_pos:
+            return 0.0
+        my_pos = np.array([self.x, self.y])
+        dists = [np.linalg.norm(my_pos - np.array(t)) for t in self.treasure_pos]
+        return min(dists)
+
     def reset(self, seed=None, options=None):
             super().reset(seed=seed)
             
@@ -129,6 +126,11 @@ class DeepSeaScavenger(gym.Env):
 
             self.treasure_pos = []
             self.treasures_collected = 0
+
+            self.grid_size = 50
+            cols = self.window_size // self.grid_size
+            rows = self.window_size // self.grid_size
+            self.visited_grid = np.zeros((cols, rows), dtype=bool)
 
             num_points = 12
             x_points = np.linspace(0, self.window_size, num_points)
@@ -148,7 +150,7 @@ class DeepSeaScavenger(gym.Env):
 
             for _ in range(3):
                 treasure_x = self.np_random.integers(50, self.window_size - 50)
-                treasure_y = self.floor_heights[int(treasure_x)] - 15
+                treasure_y = self.floor_heights[int(treasure_x)] - 20
                 self.treasure_pos.append((treasure_x, treasure_y))
 
             self.static_canvas = None
@@ -161,6 +163,7 @@ class DeepSeaScavenger(gym.Env):
             if self.render_mode == "human":
                 self._render_frame()
 
+            self.prev_treasure_dist = self._get_distance_to_nearest_treasure()
             return observation, info
     
     def _create_static_render(self):
@@ -213,48 +216,43 @@ class DeepSeaScavenger(gym.Env):
             else:
                  return True
         return False
-    
+
     def _cast_rays(self, dist):
         num_rays = 12
-        steps = 10 
-        
+        steps = 10
+
         angles = np.linspace(0, 2 * np.pi, num_rays, endpoint=False)
         dists = np.linspace(0, dist, steps)
-        
+
         dx = np.sin(angles)[:, np.newaxis]
         dy = np.cos(angles)[:, np.newaxis]
-        
+
         test_x_raw = self.x + dx * dists
         test_y = self.y + dy * dists
-        
+
         test_x_idx = np.clip(test_x_raw.astype(int), 0, self.window_size - 1)
-        
-        hit_floor = test_y >= self.floor_heights[test_x_idx]
-        
+
+        is_wall_hit = (test_x_raw <= 0) | (test_x_raw >= self.window_size - 1)
+        is_floor_hit = test_y >= self.floor_heights[test_x_idx]
+
+        hits = is_wall_hit | is_floor_hit
+        hit_indices = np.argmax(hits, axis=1)
+        any_hit = np.any(hits, axis=1)
+
         readings = np.ones(num_rays, dtype=np.float32)
-        for i in range(num_rays):
-            for j in range(steps):
-                curr_x = test_x_raw[i, j]
-                curr_y = test_y[i, j]
-                
-                is_wall_hit = curr_x <= 0 or curr_x >= self.window_size - 1
-                is_floor_hit = hit_floor[i, j]
-                
-                if is_wall_hit or is_floor_hit:
-                    readings[i] = dists[j] / dist
-                    break
-                    
+        readings[any_hit] = dists[hit_indices[any_hit]] / dist
+
         return readings
     
     def _get_nearest_treasure(self):
-        if not self.treasures:
+        if not self.treasure_pos:
             return None, float('inf')
         
         my_pos = np.array([self.x, self.y])
-        distances = [np.linalg.norm(my_pos - np.array(t)) for t in self.treasures]
+        distances = [np.linalg.norm(my_pos - np.array(t)) for t in self.treasure_pos]
         min_idx = np.argmin(distances)
         
-        return self.treasures[min_idx], distances[min_idx]
+        return self.treasure_pos[min_idx], distances[min_idx]
 
     def step(self, action):
             # Reading action
@@ -264,8 +262,8 @@ class DeepSeaScavenger(gym.Env):
 
             # Physics
             self.angle += torque * 0.025
-            self.speed += engine * 0.0375
-            self.speed = np.clip(self.speed, -0.625, 1.25)
+            self.speed += engine * 0.0425
+            self.speed = np.clip(self.speed, -0.750, 1.25)
             
             # Updating the position of the submarine
             self.x += np.cos(self.angle) * self.speed
@@ -287,63 +285,85 @@ class DeepSeaScavenger(gym.Env):
             self.oxygen -= 0.025
             horizon = 50
             if self.is_sonar_active:
-                self.oxygen -= 0.375
+                self.oxygen -= 0.225
                 horizon = 150
                 self.sonar_readings = self._cast_rays(dist=horizon)
             else:
                 self.sonar_readings = self._cast_rays(dist=horizon)
 
             # Animated bubbles rising behind the sub
-            for bubble in self.bubbles:
-                bubble["y"] -= bubble["speed"]
-                bubble["x"] += bubble["drift"]
-                bubble["alpha"] = max(0, bubble["alpha"] - 1)
-                bubble["life"] -= 1
-            self.bubbles = [bubble for bubble in self.bubbles if bubble["life"] > 0 and bubble["alpha"] > 0 and bubble["y"] > 100]
+            if self.render_mode == "human":
+                for bubble in self.bubbles:
+                    bubble["y"] -= bubble["speed"]
+                    bubble["x"] += bubble["drift"]
+                    bubble["alpha"] = max(0, bubble["alpha"] - 1)
+                    bubble["life"] -= 1
+                self.bubbles = [bubble for bubble in self.bubbles if bubble["life"] > 0 and bubble["alpha"] > 0 and bubble["y"] > 100]
 
-            if len(self.bubbles) < 25 and abs(self.speed) > 0.05:
-                for _ in range(2):
-                    drift = float(self.np_random.uniform(-0.35, 0.35))
-                    speed = float(self.np_random.uniform(0.9, 1.8))
-                    radius = int(self.np_random.integers(2, 5))
-                    offset_x = float(self.np_random.uniform(-6, 6))
-                    offset_y = float(self.np_random.uniform(4, 12))
-                    self.bubbles.append({
-                        "x": self.x - np.cos(self.angle) * offset_y + np.sin(self.angle) * offset_x,
-                        "y": self.y - np.sin(self.angle) * offset_y - np.cos(self.angle) * offset_x,
-                        "radius": radius,
-                        "speed": speed,
-                        "drift": drift,
-                        "alpha": 180,
-                        "life": 40 + int(self.np_random.integers(0, 20))
-                    })
+                if len(self.bubbles) < 25 and abs(self.speed) > 0.05:
+                    for _ in range(2):
+                        drift = float(self.np_random.uniform(-0.35, 0.35))
+                        speed = float(self.np_random.uniform(0.9, 1.8))
+                        radius = int(self.np_random.integers(2, 5))
+                        offset_x = float(self.np_random.uniform(-6, 6))
+                        offset_y = float(self.np_random.uniform(4, 12))
+                        self.bubbles.append({
+                            "x": self.x - np.cos(self.angle) * offset_y + np.sin(self.angle) * offset_x,
+                            "y": self.y - np.sin(self.angle) * offset_y - np.cos(self.angle) * offset_x,
+                            "radius": radius,
+                            "speed": speed,
+                            "drift": drift,
+                            "alpha": 180,
+                            "life": 40 + int(self.np_random.integers(0, 20))
+                        })
 
             # Check for termination condition (hit the bottom or ran out of oxygen)
             terminated = self.oxygen <= 0 or self._check_collision()
             completed = len(self.treasure_pos) == 0
             
             # Reward
-            reward = -0.1
+            current_dist = self._get_distance_to_nearest_treasure()
+            distance_delta = self.prev_treasure_dist - current_dist
+            self.prev_treasure_dist = current_dist
+            multiplier = 1.0 + (500 / (current_dist + 50)) * 7
+
+            reward = -5 + (distance_delta * multiplier)
+
+            grid_x = int(np.clip(self.x // self.grid_size, 0, self.visited_grid.shape[0] - 1))
+            grid_y = int(np.clip(self.y // self.grid_size, 0, self.visited_grid.shape[1] - 1))
+
+            exploration_reward = 0
+            if not self.visited_grid[grid_x, grid_y]:
+                self.visited_grid[grid_x, grid_y] = True
+                exploration_reward = 10.0
+
+            reward += exploration_reward
+
+            min_sonar_dist = np.min(self.sonar_readings)
+            if min_sonar_dist < 15:
+                reward -= (15 - min_sonar_dist) * 3
 
             if terminated:
                 if self.oxygen <= 0:
-                    reward = -20.0
+                    reward = -1500.0
                 else:
-                    reward = -50.0
+                    reward = -2000.0
 
             if completed:
-                reward = 500.0
+                reward = 5000.0
 
             # Collecting treasuers
             for i in range(len(self.treasure_pos) - 1, -1, -1):
                 curr_treasure_pos = self.treasure_pos[i]
                 dist = np.linalg.norm(np.array([self.x, self.y]) - curr_treasure_pos)
                 
-                if dist < 25.0:
-                    reward += 100.0
+                if dist < 35.0:
+                    reward += 2500.0
                     self.treasures_collected += 1
                     self.oxygen = min(self.max_oxygen, self.oxygen + 20)
                     self.treasure_pos.pop(i)
+                    _, new_dist = self._get_nearest_treasure()
+                    self.prev_treasure_dist = new_dist
 
             # Preparing info
             observation = self._get_obs(horizon)
@@ -475,28 +495,28 @@ class DeepSeaScavenger(gym.Env):
 
 
 
-env = DeepSeaScavenger(render_mode="human")
-obs, info = env.reset()
-
-running = True
-while running:
-    keys = pygame.key.get_pressed()
-    
-    action = [0.0, 0.0, 0.0]
-    
-    if keys[pygame.K_UP]:    action[0] = 1.0
-    if keys[pygame.K_DOWN]:  action[0] = -1.0
-    if keys[pygame.K_LEFT]:  action[1] = -1.0
-    if keys[pygame.K_RIGHT]: action[1] = 1.0
-    if keys[pygame.K_SPACE]: action[2] = 1.0
-    
-    obs, reward, terminated, truncated, info = env.step(np.array(action, dtype=np.float32))
-    
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            running = False
-            
-    if terminated or truncated:
-        obs, info = env.reset()
-
-env.close()
+# env = DeepSeaScavenger(render_mode="human")
+# obs, info = env.reset()
+#
+# running = True
+# while running:
+#     keys = pygame.key.get_pressed()
+#
+#     action = [0.0, 0.0, 0.0]
+#
+#     if keys[pygame.K_UP]:    action[0] = 1.0
+#     if keys[pygame.K_DOWN]:  action[0] = -1.0
+#     if keys[pygame.K_LEFT]:  action[1] = -1.0
+#     if keys[pygame.K_RIGHT]: action[1] = 1.0
+#     if keys[pygame.K_SPACE]: action[2] = 1.0
+#
+#     obs, reward, terminated, truncated, info = env.step(np.array(action, dtype=np.float32))
+#
+#     for event in pygame.event.get():
+#         if event.type == pygame.QUIT:
+#             running = False
+#
+#     if terminated or truncated:
+#         obs, info = env.reset()
+#
+# env.close()
