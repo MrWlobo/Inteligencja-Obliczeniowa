@@ -8,7 +8,8 @@ from Projekt4.DeepSeaScavenger.envs.deep_sea_scavenger_env import DeepSeaScaveng
 env = DeepSeaScavenger(render_mode="human")
 # model_path = "models/PPO/48000.zip"
 # model = PPO.load(model_path, env=env)
-model_path = "models/SAC/100000.zip"
+model_path = "models/SAC_4/100000.zip"
+
 model = SAC.load(model_path, env=env)
 
 episodes = 5

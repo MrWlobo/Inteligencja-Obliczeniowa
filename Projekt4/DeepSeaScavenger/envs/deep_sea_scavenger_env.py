@@ -325,9 +325,14 @@ class DeepSeaScavenger(gym.Env):
             current_dist = self._get_distance_to_nearest_treasure()
             distance_delta = self.prev_treasure_dist - current_dist
             self.prev_treasure_dist = current_dist
-            multiplier = 1.0 + (500 / (current_dist + 50)) * 7
+            multiplier = 1.0 + np.log1p(1000 / (current_dist + 1))
 
-            reward = -5 + (distance_delta * multiplier)
+            reward = -5 + (distance_delta * multiplier)+ self.y / 100
+
+            reward += (self.oxygen / self.max_oxygen) * 0.1
+
+            if self.speed < 0.1 and self.y > surface_limit + 10:
+                reward -= 1.0
 
             grid_x = int(np.clip(self.x // self.grid_size, 0, self.visited_grid.shape[0] - 1))
             grid_y = int(np.clip(self.y // self.grid_size, 0, self.visited_grid.shape[1] - 1))
@@ -335,35 +340,34 @@ class DeepSeaScavenger(gym.Env):
             exploration_reward = 0
             if not self.visited_grid[grid_x, grid_y]:
                 self.visited_grid[grid_x, grid_y] = True
-                exploration_reward = 10.0
+                exploration_reward = 50.0
 
             reward += exploration_reward
 
-            min_sonar_dist = np.min(self.sonar_readings)
-            if min_sonar_dist < 15:
-                reward -= (15 - min_sonar_dist) * 3
-
             if terminated:
                 if self.oxygen <= 0:
-                    reward = -1500.0
+                    reward = -4500.0
                 else:
-                    reward = -2000.0
+                    reward = -5000.0
 
             if completed:
-                reward = 5000.0
+                reward = 7000.0
 
             # Collecting treasuers
+            treasure_collected_this_step = False
             for i in range(len(self.treasure_pos) - 1, -1, -1):
                 curr_treasure_pos = self.treasure_pos[i]
                 dist = np.linalg.norm(np.array([self.x, self.y]) - curr_treasure_pos)
-                
+
                 if dist < 35.0:
-                    reward += 2500.0
+                    reward += 3000.0
                     self.treasures_collected += 1
                     self.oxygen = min(self.max_oxygen, self.oxygen + 20)
                     self.treasure_pos.pop(i)
-                    _, new_dist = self._get_nearest_treasure()
-                    self.prev_treasure_dist = new_dist
+                    treasure_collected_this_step = True
+
+            if treasure_collected_this_step and self.treasure_pos:
+                self.prev_treasure_dist = self._get_distance_to_nearest_treasure()
 
             # Preparing info
             observation = self._get_obs(horizon)

@@ -7,7 +7,7 @@ import numpy as np
 
 from Projekt4.DeepSeaScavenger.envs.deep_sea_scavenger_env import DeepSeaScavenger
 
-models_dir = "models/SAC_3"
+models_dir = "models/SAC_4"
 logdir = "logs"
 os.makedirs(models_dir, exist_ok=True)
 os.makedirs(logdir, exist_ok=True)
@@ -57,12 +57,9 @@ model = SAC(
 )
 
 logger = RewardLogger()
-TIMESTEPS = 1000
-
-for i in range(1, 201):
-    model.learn(total_timesteps=TIMESTEPS, reset_num_timesteps=False, callback=logger)
-    if i % 10 == 0:
-        model.save(f"{models_dir}/{TIMESTEPS*i}")
+TOTAL_TRAINING_STEPS = 100000
+model.learn(total_timesteps=TOTAL_TRAINING_STEPS, callback=logger, reset_num_timesteps=False)
+model.save(f"{models_dir}/{TOTAL_TRAINING_STEPS}")
 
 rewards = logger.rewards
 window_size = 20
@@ -70,5 +67,5 @@ if len(rewards) >= window_size:
     rewards_smoothed = np.convolve(rewards, np.ones(window_size) / window_size, mode="valid")
     plt.figure(figsize=(10, 6))
     plt.plot(range(window_size - 1, len(rewards)), rewards_smoothed, color='blue', linewidth=2)
-    plt.savefig(f"{logdir}/sac_learning_curve_3.png")
+    plt.savefig(f"{logdir}/sac_learning_curve_4.png")
     plt.show()
